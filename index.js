@@ -1,9 +1,21 @@
 const express = require("express");
 const mysql = require("mysql2");
 const app = express();
+
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const dotenv = require("dotenv");
+
+const twilio = require('twilio');
+const crypto = require('crypto');
+
+const accountSid = 'your_twilio_account_sid';
+const authToken = 'your_twilio_auth_token';
+const twilioPhoneNumber = 'your_twilio_phone_number';
+const client = twilio(accountSid, authToken);
+
+let otpStorage = {};
+
 const port = 4000;
 
 dotenv.config();
@@ -239,6 +251,65 @@ app.post("/location", (req, res) => {
   console.log(`User Location: Latitude ${latitude}, Longitude ${longitude}`);
   
   res.json({ message: "Location received successfully", latitude, longitude });
+});
+
+app.post("/request-password-reset", (req, res) => {
+  const { phone_number } = req.body;
+
+  const query = "SELECT * FROM users WHERE phone_number = ?";
+  db.query(query, [phone_number], (err, results) => {
+    if (err) {
+      return res.status(500).send("Error fetching user");
+    }
+
+    if (results.length === 0) {
+      return res.status(401).send("User not found");
+    }
+
+    const user = results[0];
+
+    const otp = crypto.randomInt(100000, 999999).toString();
+    otpStorage[phone_number] = otp;
+
+    client.messages
+      .create({
+        body: `Your password reset code is: ${otp}`,
+        from: twilioPhoneNumber,
+        to: phone_number,
+      })
+      .then(message => {
+        console.log('OTP sent:', message.sid);
+        res.status(200).json({ message: 'OTP sent successfully' });
+      })
+      .catch(error => {
+        console.error('Error sending OTP:', error);
+        res.status(500).json({ message: 'Error sending OTP' });
+      });
+  });
+});
+
+app.post("/verify-otp", (req, res) => {
+  const { phone_number, otp, newPassword } = req.body;
+
+  if (otpStorage[phone_number] === otp) {
+    const hashedPassword = bcrypt.hashSync(newPassword, 10);
+
+    db.query(
+      "UPDATE users SET password = ? WHERE phone_number = ?",
+      [hashedPassword, phone_number],
+      (err) => {
+        if (err) {
+          return res.status(500).send("Error resetting password");
+        }
+
+        delete otpStorage[phone_number];
+
+        res.status(200).json({ message: "Password reset successfully" });
+      }
+    );
+  } else {
+    return res.status(400).send("Invalid OTP");
+  }
 });
 
 app.listen(port, () => {
