@@ -61,7 +61,7 @@ app.post("/login", (req, res) => {
       return res.status(401).send("Incorrect password");
     }
 
-    const token = jwt.sign({ id: user.id, email: user.phone_number }, JWT_SECRET, {
+    const token = jwt.sign({ id: user.id, phone_number: user.phone_number }, JWT_SECRET, {
       expiresIn: "1h",
     });
 
