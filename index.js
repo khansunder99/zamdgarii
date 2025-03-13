@@ -59,7 +59,7 @@ app.post("/login", (req, res) => {
   });
 });
 
-app.get("/profile", authenticateToken, (req, res) => {
+app.get("/profile", (req, res) => {
   res.json({ message: "Welcome", user: req.user });
 });
 
