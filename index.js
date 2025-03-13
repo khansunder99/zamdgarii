@@ -3,14 +3,12 @@ const mysql = require("mysql2");
 const app = express();
 
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 const dotenv = require("dotenv");
 
 const twilio = require('twilio');
 const crypto = require('crypto');
 
 const accountSid = 'your_twilio_account_sid';
-const authToken = 'your_twilio_auth_token';
 const twilioPhoneNumber = 'your_twilio_phone_number';
 const client = twilio(accountSid, authToken);
 
@@ -39,8 +37,6 @@ db.connect((err) => {
   console.log("Connected to MySQL database");
 });
 
-const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret_key";
-
 app.post("/login", (req, res) => {
   const { phone_number, password } = req.body;
   
@@ -60,25 +56,8 @@ app.post("/login", (req, res) => {
     if (!passwordMatch) {
       return res.status(401).send("Incorrect password");
     }
-
-    const token = jwt.sign({ id: user.id, phone_number: user.phone_number }, JWT_SECRET, {
-      expiresIn: "1h",
-    });
-
-    res.json({ token });
   });
 });
-
-const authenticateToken = (req, res, next) => {
-  const token = req.header("Authorization");
-  if (!token) return res.status(401).send("Access denied");
-
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).send("Invalid token");
-    req.user = user;
-    next();
-  });
-};
 
 app.get("/profile", authenticateToken, (req, res) => {
   res.json({ message: "Welcome", user: req.user });
@@ -96,7 +75,7 @@ app.get("/users", (req, res) => {
   });
 });
 
-app.post("/createUsers", (req, res) => {
+app.post("/createUser", (req, res) => {
   const { name, email, password } = req.body;
   const query =
     "INSERT INTO users (username, password, phone_number, user_type) VALUES (?, ?, ?, ?, ?)";
