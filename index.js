@@ -108,7 +108,7 @@ app.delete("/deleteUser/:id", (req, res) => {
   });
 });
 
-app.get("/place", (req, res) => {
+app.get("/places", (req, res) => {
   const query = "SELECT * FROM places";
   db.query(query, (err, results) => {
     if (err) {
