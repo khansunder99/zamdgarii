@@ -8,7 +8,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-
 const db = mysql2.createConnection({
   host: "localhost",
   user: "root",
@@ -24,6 +23,37 @@ db.connect((err) => {
   console.log("Connected to MySQL database");
 });
 
+// User Signup - Hash Password before storing
+app.post("/createUser", async (req, res) => {
+  const { username, phone_number, email, password } = req.body;
+
+  // Debugging: Log the received data
+  console.log("Received Data:", req.body);
+
+  if (!username || !phone_number || !email || !password) {
+    return res.status(400).json({ error: "All fields are required" });
+  }
+
+  try {
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const query = "INSERT INTO users (username, phone_number, email, password) VALUES (?, ?, ?, ?)";
+    db.query(query, [username, phone_number, email, hashedPassword], (err, result) => {
+      if (err) {
+        console.error("Error creating user:", err);
+        return res.status(500).json({ error: "Error creating user" });
+      }
+      res.status(201).json({ id: result.insertId, username, email });
+    });
+  } catch (error) {
+    console.error("Error hashing password:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+
+// User Login - Compare Hashed Password
 app.post("/login", (req, res) => {
   const { phone_number, password } = req.body;
   
@@ -40,11 +70,11 @@ app.post("/login", (req, res) => {
 
     const user = results[0];
 
+    // Compare the hashed password
     const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) {
       return res.status(401).send("Incorrect password");
     }
-
 
     res.json({
       message: "Login successful",
@@ -56,7 +86,6 @@ app.post("/login", (req, res) => {
     });
   });
 });
-
 
 app.get("/profile", (req, res) => {
   res.json({ message: "Welcome", user: req.user });
@@ -74,32 +103,25 @@ app.get("/users", (req, res) => {
   });
 });
 
-app.post("/createUser", (req, res) => {
-  const { username, phone_number, email, password } = req.body;
-
-  const query = "INSERT INTO users (username, phone_number, email, password) VALUES (?, ?, ?, ?)";
-  
-  db.query(query, [username, phone_number, email, password], (err, result) => {
-    if (err) {
-      console.error("Error creating user:", err);
-      return res.status(500).send("Error creating user");
-    }
-
-    res.status(201).json({ id: result.insertId, username, email });
-  });
-});
-
-
-app.put("/updateUser/:id", (req, res) => {
+// Update User (Hash Password Before Updating)
+app.put("/updateUser/:id", async (req, res) => {
   const { name, email, password } = req.body;
-  db.query(
-    "UPDATE users SET username = ?, email = ?, password = ? WHERE id = ?",
-    [name, email, password, req.params.id],
-    (err) => {
-      if (err) return res.status(500).send("Error updating user");
-      res.send("User updated successfully");
-    }
-  );
+
+  try {
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    db.query(
+      "UPDATE users SET username = ?, email = ?, password = ? WHERE id = ?",
+      [name, email, hashedPassword, req.params.id],
+      (err) => {
+        if (err) return res.status(500).send("Error updating user");
+        res.send("User updated successfully");
+      }
+    );
+  } catch (error) {
+    res.status(500).send("Error hashing password");
+  }
 });
 
 app.delete("/deleteUser/:id", (req, res) => {
@@ -109,36 +131,31 @@ app.delete("/deleteUser/:id", (req, res) => {
   });
 });
 
+// Places Endpoints
 app.get("/places", (req, res) => {
-  const query = "SELECT * FROM places";
+  const query = `SELECT p.id, p.place_name, p.location, p.description, p.price, i.image_url
+      FROM places p
+      LEFT JOIN images i ON p.id = i.place_id`;
   db.query(query, (err, results) => {
-    if (err) {
-      console.error("Error fetching places:", err);
-      res.status(500).send("Error fetching places");
-    } else {
-      res.json(results);
-    }
+    if (err) return res.status(500).send("Error fetching places");
+    res.json(results);
   });
 });
 
 app.post("/createPlace", (req, res) => {
-  const { location, place_name, description } = req.body;
+  const { location, place_name, description, price } = req.body;
   const query = "INSERT INTO places (location, place_name, description, price) VALUES (?, ?, ?, ?)";
   db.query(query, [location, place_name, description, price], (err, result) => {
-    if (err) {
-      console.error("Error creating place:", err);
-      res.status(500).send("Error creating place");
-    } else {
-      res.status(201).json({ id: result.insertId, location, place_name, description, price });
-    }
+    if (err) return res.status(500).send("Error creating place");
+    res.status(201).json({ id: result.insertId, location, place_name, description, price });
   });
 });
 
 app.put("/updatePlace/:id", (req, res) => {
-  const { location, place_name, description } = req.body;
+  const { location, place_name, description, price } = req.body;
   db.query(
-    "UPDATE places SET location = ?, place_name = ?, description = ?, price = ?, WHERE id = ?",
-    [location, place_name, description, req.params.id, price],
+    "update places SET location = ?, place_name = ?, description = ?, price = ? WHERE id = ?",
+    [location, place_name, description, price, req.params.id],
     (err) => {
       if (err) return res.status(500).send("Error updating place");
       res.send("Place updated successfully");
@@ -153,6 +170,7 @@ app.delete("/deletePlace/:id", (req, res) => {
   });
 });
 
+// Favorites Endpoints
 app.post("/createFavorite", (req, res) => {
   const { user_id, place_id } = req.body;
   db.query("INSERT INTO favorites (user_id, place_id) VALUES (?, ?)", [user_id, place_id], (err, result) => {
@@ -175,18 +193,7 @@ app.delete("/deleteFavorite/:id", (req, res) => {
   });
 });
 
-app.put("/updateFavorite/:id", (req, res) => {
-  const { user_id, place_id } = req.body;
-  db.query(
-    "UPDATE favorites SET user_id = ?, place_id = ? WHERE id = ?",
-    [user_id, place_id, req.params.id],
-    (err) => {
-      if (err) return res.status(500).send("Error updating favorite");
-      res.send("Favorite updated successfully");
-    }
-  );
-});
-
+// Reviews Endpoints
 app.post("/createReview", (req, res) => {
   const { user_id, place_id, review_text, rating } = req.body;
   db.query("INSERT INTO reviews (user_id, place_id, review_text, rating) VALUES (?, ?, ?, ?)", [user_id, place_id, review_text, rating], (err, result) => {
@@ -209,30 +216,22 @@ app.delete("/deleteReview/:id", (req, res) => {
   });
 });
 
-app.put("/updateReview/:id", (req, res) => {
-  const { user_id, place_id, rating, review_text } = req.body;
-  db.query(
-    "UPDATE reviews SET user_id = ?, place_id = ?, rating = ?, review_text = ? WHERE id = ?",
-    [user_id, place_id, rating, review_text, req.params.id],
-    (err) => {
-      if (err) return res.status(500).send("Error updating review");
-      res.send("Review updated successfully");
-    }
-  );
+app.get("/categories", (req, res) => {
+  db.query("SELECT * FROM categories", (err, results) => {
+    if (err) return res.status(500).send("Error fetching reviews");
+    res.json(results);
+  });
 });
 
+// Location Tracking
 app.post("/location", (req, res) => {
   const { latitude, longitude } = req.body;
-  
   if (!latitude || !longitude) {
     return res.status(400).json({ error: "Location data is required" });
   }
-
   console.log(`User Location: Latitude ${latitude}, Longitude ${longitude}`);
-  
   res.json({ message: "Location received successfully", latitude, longitude });
 });
-
 
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
