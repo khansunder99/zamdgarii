@@ -53,12 +53,11 @@ app.post("/createUser", async (req, res) => {
 });
 
 
-// User Login - Compare Hashed Password
 app.post("/login", (req, res) => {
-  const { phone_number, password } = req.body;
-  
-  const query = "SELECT * FROM users WHERE phone_number = ?";
-  db.query(query, [phone_number], async (err, results) => {
+  const { identifier, password } = req.body;
+
+  const query = "SELECT * FROM users WHERE phone_number = ? OR username = ?";
+  db.query(query, [identifier, identifier], async (err, results) => {
     if (err) {
       console.error("Error fetching user:", err);
       return res.status(500).send("Error fetching user");
@@ -70,7 +69,6 @@ app.post("/login", (req, res) => {
 
     const user = results[0];
 
-    // Compare the hashed password
     const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) {
       return res.status(401).send("Incorrect password");
@@ -86,6 +84,7 @@ app.post("/login", (req, res) => {
     });
   });
 });
+
 
 app.get("/profile", (req, res) => {
   res.json({ message: "Welcome", user: req.user });
