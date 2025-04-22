@@ -3,6 +3,8 @@ const mysql2 = require("mysql2");
 const bcrypt = require("bcryptjs");
 const cors = require("cors");
 const port = 4000;
+const jwt = require("jsonwebtoken");
+const JWT_SECRET = "your_super_secret_key";
 
 const app = express();
 app.use(cors());
@@ -23,11 +25,9 @@ db.connect((err) => {
   console.log("Connected to MySQL database");
 });
 
-// User Signup - Hash Password before storing
 app.post("/createUser", async (req, res) => {
   const { username, phone_number, email, password } = req.body;
 
-  // Debugging: Log the received data
   console.log("Received Data:", req.body);
 
   if (!username || !phone_number || !email || !password) {
@@ -74,8 +74,18 @@ app.post("/login", (req, res) => {
       return res.status(401).send("Incorrect password");
     }
 
+    const token = jwt.sign(
+      {
+        id: user.id,
+        username: user.username,
+        phone_number: user.phone_number,
+      },
+      JWT_SECRET,
+      { expiresIn: "4h" }
+    );
     res.json({
       message: "Login successful",
+      token,
       user: {
         id: user.id,
         name: user.username,
@@ -84,7 +94,6 @@ app.post("/login", (req, res) => {
     });
   });
 });
-
 
 app.get("/profile", (req, res) => {
   res.json({ message: "Welcome", user: req.user });
