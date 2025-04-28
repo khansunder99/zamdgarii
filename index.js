@@ -2,7 +2,6 @@ const express = require("express");
 const mysql2 = require("mysql2");
 const bcrypt = require("bcryptjs");
 const cors = require("cors");
-const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
 require("dotenv").config();
 
