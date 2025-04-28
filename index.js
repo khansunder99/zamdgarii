@@ -7,6 +7,9 @@ const cookieParser = require("cookie-parser");
 require("dotenv").config();
 
 const port = 4000;
+const jwt = require("jsonwebtoken");
+const JWT_SECRET = "your_super_secret_key";
+
 const app = express();
 
 app.use(cors({
