@@ -17,7 +17,6 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 app.use("/uploads", express.static("uploads"));
-app.use(notesRouter);
 
 const db = mysql2.createConnection({
   host: "localhost",
@@ -155,15 +154,26 @@ app.get("/api/nearby", async (req, res) => {
   if (!lat || !lng || !radius) return res.status(400).json({ error: "lat, lng, radius шаардлагатай!" });
 
   const sql = `
-    SELECT *,
+    SELECT 
+      p.*,
+      c.category_name,
+      (
+        SELECT i.image_url FROM images i 
+        WHERE i.place_id = p.id 
+        LIMIT 1
+      ) AS image_url,
+      ROUND(AVG(r.rating), 1) AS rating,
       (6371 * acos(
-        cos(radians(?)) * cos(radians(latitude)) *
-        cos(radians(longitude) - radians(?)) +
-        sin(radians(?)) * sin(radians(latitude))
+        cos(radians(?)) * cos(radians(p.latitude)) *
+        cos(radians(p.longitude) - radians(?)) +
+        sin(radians(?)) * sin(radians(p.latitude))
       )) AS distance
-    FROM places
+    FROM places p
+    LEFT JOIN categories c ON p.category_id = c.id
+    LEFT JOIN reviews r ON p.id = r.place_id
+    GROUP BY p.id
     HAVING distance <= ?
-    ORDER BY distance ASC
+    ORDER BY distance ASC;
   `;
 
   try {
